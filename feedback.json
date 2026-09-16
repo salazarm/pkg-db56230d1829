@@ -1,0 +1,11 @@
+{
+  "updated": "2026-09-16T02:20:19+00:00",
+  "version": 1,
+  "events": [],
+  "aggregates": {
+    "liked_brands": {},
+    "passed_brands": {},
+    "disliked_inventory": {},
+    "vibe_tag_scores": {}
+  }
+}

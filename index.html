@@ -219,9 +219,10 @@ footer.app-footer{padding:0 var(--pad) 16px;color:var(--muted);font-size:.68rem}
 .swipe-why{color:var(--muted);font-size:.76rem;line-height:1.4;min-height:1.4em}
 .swipe-link{display:inline-block;color:var(--accent);font-size:.74rem;font-weight:650;text-decoration:none;margin-top:7px}
 .swipe-link:hover{text-decoration:underline}
-.swipe-actions{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:9px}
+.swipe-actions{display:grid;grid-template-columns:1fr 1fr auto 1fr;align-items:center;gap:9px}
 .swipe-action{appearance:none;border:1px solid var(--border);border-radius:12px;background:var(--panel);color:var(--text);font:inherit;font-weight:700;min-height:48px;padding:8px 10px;cursor:pointer}
 .swipe-action.negative{border-color:color-mix(in srgb,#ff6d79 52%,var(--border));color:#ff9ba3}
+.swipe-action.skip{border-color:color-mix(in srgb,var(--muted) 52%,var(--border));color:#c2cada}
 .swipe-action.positive{border-color:color-mix(in srgb,#5ecf8a 52%,var(--border));color:#91e8b3}
 .swipe-action.undo{width:42px;height:42px;min-height:42px;padding:0;border-radius:999px;color:var(--muted)}
 .swipe-action:disabled{opacity:.35;cursor:not-allowed}
@@ -232,7 +233,7 @@ footer.app-footer{padding:0 var(--pad) 16px;color:var(--muted);font-size:.68rem}
 .swipe-empty strong{display:block;color:var(--text);font-size:1rem;margin-bottom:5px}
 .sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
 .swipe-file{display:none}
-@media(max-width:520px){.swipe-stage{height:calc(100svh - 285px);min-height:390px;max-height:570px}.swipe-body{padding:10px 12px 12px}.swipe-name{font-size:1.02rem}.swipe-action{min-height:46px}}
+@media(max-width:520px){.swipe-stage{height:calc(100svh - 285px);min-height:390px;max-height:570px}.swipe-body{padding:10px 12px 12px}.swipe-name{font-size:1.02rem}.swipe-actions{gap:6px}.swipe-action{min-height:46px;padding-inline:6px;font-size:.78rem}}
 @media(prefers-reduced-motion:no-preference){.swipe-card{transition:transform .34s cubic-bezier(.2,.85,.25,1.15),opacity .28s ease}.swipe-action:not(:disabled):active{transform:scale(.96)}}
 @media(prefers-reduced-motion:reduce){.swipe-card,.swipe-action{transition:none!important;animation:none!important}}
 </style>
@@ -381,10 +382,11 @@ footer.app-footer{padding:0 var(--pad) 16px;color:var(--muted);font-size:.68rem}
         </div>
         <div class="swipe-progress" id="swipeProgress"></div>
       </div>
-      <p class="note" id="swipeNote">Swipe right for more like this, or left to pass.</p>
+      <p class="note" id="swipeNote">Swipe right to like, left to pass, or Skip if undecided. Keyboard: ← / →, Space or S to skip, U to undo.</p>
       <div class="swipe-stage" id="swipeStage" aria-live="off"></div>
       <div class="swipe-actions" aria-label="Card actions">
         <button type="button" class="swipe-action negative" id="swipeNegative">✕ Pass</button>
+        <button type="button" class="swipe-action skip" id="swipeSkip" title="Skip / Undecided (Space or S)">Skip</button>
         <button type="button" class="swipe-action undo" id="swipeUndo" aria-label="Undo last swipe" title="Undo (U)">↶</button>
         <button type="button" class="swipe-action positive" id="swipePositive">♥ Like</button>
       </div>
@@ -755,6 +757,8 @@ let swipeMode="discover";
 let swipeSeeds={discover:[],closet:[]};
 let swipeEvents=[];
 let swipeSession={discover:0,closet:0};
+let swipeSkipped={discover:new Set(),closet:new Set()};
+let swipeActionHistory=[];
 let swipeBusy=false;
 function safeHttpUrl(value){if(!value)return"";try{const u=new URL(value,location.href);return /^https?:$/.test(u.protocol)?u.href:"";}catch(_){return"";}}
 function safeImageUrl(value){const raw=String(value||"");return /^data:image\/(?:png|jpe?g|webp|gif);base64,/i.test(raw)?raw:safeHttpUrl(raw);}
@@ -782,7 +786,7 @@ function allSwipeItems(mode){
 }
 function swipeDeck(mode=swipeMode){
   const swiped=new Set(swipeEvents.filter(e=>e.mode===mode).map(e=>String(e.item_id)));
-  return allSwipeItems(mode).filter(it=>!swiped.has(String(it.id)));
+  return allSwipeItems(mode).filter(it=>!swiped.has(String(it.id))&&!swipeSkipped[mode].has(String(it.id)));
 }
 function validFeedbackEvent(e){
   return e&&typeof e==="object"&&typeof e.id==="string"&&typeof e.ts==="string"&&["discover","closet"].includes(e.mode)&&["like","pass","dislike","keep"].includes(e.verdict)&&typeof e.item_id==="string";
@@ -796,6 +800,7 @@ function feedbackAggregates(){
   const out={liked_brands:{},passed_brands:{},disliked_inventory:{},liked_vibes:{},disliked_vibes:{},vibe_tag_scores:{}};
   const add=(obj,key,n=1)=>{if(key)obj[key]=(obj[key]||0)+n;};
   for(const e of swipeEvents){
+    if(e.verdict==="skip"||e.verdict==="undecided")continue;
     const item=e.item||{},positive=e.verdict==="like"||e.verdict==="keep";
     if(e.verdict==="like")add(out.liked_brands,item.brand);
     if(e.verdict==="pass")add(out.passed_brands,item.brand);
@@ -836,17 +841,20 @@ function swipeCardHtml(item,depth){
 }
 function renderSwipe(){
   const deck=swipeDeck();
-  const all=allSwipeItems(swipeMode),done=all.length-deck.length;
+  const all=allSwipeItems(swipeMode);
+  const decided=new Set(swipeEvents.filter(e=>e.mode===swipeMode).map(e=>String(e.item_id))).size;
+  const skipped=swipeSkipped[swipeMode].size;
   document.querySelectorAll("[data-swipe-mode]").forEach(b=>{const on=b.dataset.swipeMode===swipeMode;b.classList.toggle("active",on);b.setAttribute("aria-pressed",on?"true":"false");});
-  document.getElementById("swipeNote").textContent=swipeMode==="discover"?"Swipe right for more like this, or left to pass.":"Rate only Marco’s owned items: “Didn’t like” is a negative taste signal; “Still good” reinforces it.";
+  document.getElementById("swipeNote").textContent=swipeMode==="discover"?"Pass means you didn’t like it. Skip means undecided and sends no taste signal. Keyboard: ← / →, Space or S to skip, U to undo.":"“Didn’t like” is a negative taste signal; “Still good” is positive. Skip means undecided and sends no taste signal. Keyboard: ← / →, Space or S to skip, U to undo.";
   document.getElementById("swipeNegative").textContent=swipeMode==="discover"?"✕ Pass":"✕ Didn’t like";
   document.getElementById("swipePositive").textContent=swipeMode==="discover"?"♥ Like":"✓ Still good";
-  document.getElementById("swipeProgress").innerHTML=`<strong>${deck.length} left</strong>${done} rated this deck`;
-  document.getElementById("swipeUndo").disabled=!swipeEvents.length;
+  document.getElementById("swipeProgress").innerHTML=`<strong>${deck.length} left</strong>${decided} decided${skipped?` · ${skipped} skipped`:""}`;
+  document.getElementById("swipeUndo").disabled=!swipeActionHistory.length&&!swipeEvents.length;
   document.getElementById("swipeNegative").disabled=!deck.length||swipeBusy;
+  document.getElementById("swipeSkip").disabled=!deck.length||swipeBusy;
   document.getElementById("swipePositive").disabled=!deck.length||swipeBusy;
   const stage=document.getElementById("swipeStage");
-  if(!deck.length){stage.innerHTML=`<div class="swipe-empty"><div><strong>${all.length?"You’re all caught up":"No cards available yet"}</strong>${all.length?"You rated every item in this deck. Undo or reset to revisit them.":"Discovery and inventory seeds could not be loaded."}</div></div>`;return;}
+  if(!deck.length){stage.innerHTML=`<div class="swipe-empty"><div><strong>${all.length?"You’re all caught up":"No cards available yet"}</strong>${all.length?"You reviewed every item in this deck. Undo or reset to revisit them.":"Discovery and inventory seeds could not be loaded."}</div></div>`;return;}
   stage.innerHTML=deck.slice(0,3).reverse().map((item,reverseIndex)=>swipeCardHtml(item,Math.min(2,2-reverseIndex))).join("");
   stage.querySelectorAll("[data-swipe-image]").forEach(img=>img.addEventListener("error",()=>{const brand=(img.alt||"?").split(/\s+/)[0]||"?";const fallback=document.createElement("div");fallback.className="swipe-fallback";fallback.setAttribute("role","img");fallback.setAttribute("aria-label","Product photo unavailable");fallback.textContent=brand.slice(0,2).toUpperCase();img.replaceWith(fallback);},{once:true}));
   bindSwipePointer(stage.querySelector(".swipe-card.top"));
@@ -860,13 +868,34 @@ function commitSwipe(direction){
   const verdict=swipeMode==="discover"?(direction<0?"pass":"like"):(direction<0?"dislike":"keep");
   const card=document.querySelector("#swipeStage .swipe-card.top");
   if(card)card.classList.add(direction<0?"dismiss-left":"dismiss-right");
-  swipeEvents.push(makeFeedbackEvent(item,verdict));swipeSession[swipeMode]++;persistFeedback();
+  const event=makeFeedbackEvent(item,verdict);
+  swipeEvents.push(event);swipeActionHistory.push({type:"verdict",mode:swipeMode,eventId:event.id});swipeSession[swipeMode]++;persistFeedback();
   announceSwipe(`${item.name}: ${verdict==="dislike"?"didn’t like":verdict==="keep"?"still good":verdict}`);
   window.setTimeout(()=>{swipeBusy=false;renderSwipe();},window.matchMedia("(prefers-reduced-motion: reduce)").matches?0:280);
 }
+function skipSwipe(){
+  if(swipeBusy)return;
+  const item=swipeDeck()[0];if(!item)return;
+  swipeBusy=true;
+  swipeSkipped[swipeMode].add(String(item.id));
+  swipeActionHistory.push({type:"skip",mode:swipeMode,itemId:String(item.id)});
+  const card=document.querySelector("#swipeStage .swipe-card.top");
+  if(card){card.style.transform="translate3d(0,-12px,0) scale(.94)";card.style.opacity="0";}
+  announceSwipe(`${item.name}: skipped as undecided. No taste signal recorded.`);
+  window.setTimeout(()=>{swipeBusy=false;renderSwipe();},window.matchMedia("(prefers-reduced-motion: reduce)").matches?0:280);
+}
 function undoSwipe(){
-  if(swipeBusy||!swipeEvents.length)return;
-  const event=swipeEvents.pop();persistFeedback();announceSwipe(`Undid ${event.verdict} for ${event.item?.name||"item"}.`);renderSwipe();
+  if(swipeBusy)return;
+  const action=swipeActionHistory.pop();
+  if(action?.type==="skip"){
+    swipeSkipped[action.mode].delete(action.itemId);
+    announceSwipe("Restored skipped item.");
+  }else{
+    const index=action?.type==="verdict"?swipeEvents.findIndex(event=>event.id===action.eventId):swipeEvents.length-1;
+    if(index<0)return;
+    const [event]=swipeEvents.splice(index,1);persistFeedback();announceSwipe(`Undid ${event.verdict} for ${event.item?.name||"item"}.`);
+  }
+  renderSwipe();
 }
 function bindSwipePointer(card){
   if(!card)return;
@@ -1059,12 +1088,13 @@ function wire(){
     const mode=e.target.closest("[data-swipe-mode]");
     if(mode){swipeMode=mode.dataset.swipeMode;renderSwipe();return;}
     if(e.target.closest("#swipeNegative")){commitSwipe(-1);return;}
+    if(e.target.closest("#swipeSkip")){skipSwipe();return;}
     if(e.target.closest("#swipePositive")){commitSwipe(1);return;}
     if(e.target.closest("#swipeUndo")){undoSwipe();return;}
     if(e.target.closest("#swipeExport")){exportFeedback();return;}
     if(e.target.closest("#swipeImport")){document.getElementById("swipeImportFile").click();return;}
     if(e.target.closest("#swipeReset")){
-      if(confirm(`Reset all ${swipeMode==="discover"?"Discover":"My closet"} ratings?`)){swipeEvents=swipeEvents.filter(event=>event.mode!==swipeMode);persistFeedback();renderSwipe();announceSwipe("Deck reset.");}
+      if(confirm(`Reset all ${swipeMode==="discover"?"Discover":"My closet"} decisions and skips?`)){swipeEvents=swipeEvents.filter(event=>event.mode!==swipeMode);swipeSkipped[swipeMode].clear();swipeActionHistory=swipeActionHistory.filter(action=>action.mode!==swipeMode);persistFeedback();renderSwipe();announceSwipe("Deck reset.");}
     }
   });
   document.getElementById("swipeImportFile").addEventListener("change",e=>{const file=e.target.files&&e.target.files[0];if(file)importFeedbackFile(file);e.target.value="";});
@@ -1072,6 +1102,7 @@ function wire(){
     if(activeTab!=="swipe"||document.getElementById("lightbox").classList.contains("open")||e.altKey||e.ctrlKey||e.metaKey||e.target.matches("input,select,textarea"))return;
     if(e.key==="ArrowLeft"){e.preventDefault();commitSwipe(-1);}
     if(e.key==="ArrowRight"){e.preventDefault();commitSwipe(1);}
+    if(e.key===" "||e.key.toLowerCase()==="s"){e.preventDefault();skipSwipe();}
     if(e.key.toLowerCase()==="u"){e.preventDefault();undoSwipe();}
   });
   document.getElementById("q").addEventListener("input",()=>renderShipments());

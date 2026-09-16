@@ -760,12 +760,12 @@ function safeImageUrl(value){const raw=String(value||"");return /^data:image\/(?
 function swipeId(item,prefix){return String(item.id||item.item_id||`${prefix}|${item.brand||item.merchant||""}|${item.name||""}|${item.url||""}`);}
 function normalizeDiscovery(item,index){
   const image=item.image_url||item.imageUrl||(item.imageKey?imageSrc(item.imageKey):"");
-  return {...item,id:swipeId(item,`discover-${index}`),brand:item.brand||item.merchant||"Unknown",name:item.name||"Untitled recommendation",size:item.size||item.sizes||"",price:item.price??"",cut:item.cut||item.fit||"",category:item.category||categorizeItem(item.name||""),lane:item.lane||"more_like_this",image_url:image,url:safeHttpUrl(item.url),vibe_tags:Array.isArray(item.vibe_tags)?item.vibe_tags:[],why:item.why||item.note||item.cut||"Selected from your current Discovery feed."};
+  return {...item,id:swipeId(item,"discover"),brand:item.brand||item.merchant||"Unknown",name:item.name||"Untitled recommendation",size:item.size||item.sizes||"",price:item.price??"",cut:item.cut||item.fit||"",category:item.category||categorizeItem(item.name||""),lane:item.lane||"more_like_this",image_url:image,url:safeHttpUrl(item.url),vibe_tags:Array.isArray(item.vibe_tags)?item.vibe_tags:[],why:item.why||item.note||item.cut||"Selected from your current Discovery feed."};
 }
 function normalizeCloset(item,index){
   const image=item.image_url||item.imageUrl||(item.imageKey?imageSrc(item.imageKey):"");
   const owner=String(item.owner||"marco").toLowerCase();
-  return {...item,id:swipeId(item,`closet-${index}`),owner,brand:item.brand||item.merchant||"Unknown",name:item.name||"Untitled item",size:item.size||"",price:item.price??"",cut:item.cut||item.fit||"",category:item.category||categorizeItem(item.name||""),lane:"owned",image_url:image,url:safeHttpUrl(item.url),vibe_tags:Array.isArray(item.vibe_tags)?item.vibe_tags:[],why:item.why||item.silhouette||item.fit||item.category||"From Marco’s closet."};
+  return {...item,id:swipeId(item,"closet"),owner,brand:item.brand||item.merchant||"Unknown",name:item.name||"Untitled item",size:item.size||"",price:item.price??"",cut:item.cut||item.fit||"",category:item.category||categorizeItem(item.name||""),lane:"owned",image_url:image,url:safeHttpUrl(item.url),vibe_tags:Array.isArray(item.vibe_tags)?item.vibe_tags:[],why:item.why||item.silhouette||item.fit||item.category||"From Marco’s closet."};
 }
 function dedupeSwipe(items){
   const seen=new Set();
@@ -792,14 +792,14 @@ function loadLocalFeedback(){
 function persistFeedback(){localStorage.setItem(FEEDBACK_KEY,JSON.stringify(swipeEvents));}
 function feedbackItem(item){return{brand:item.brand||"",name:item.name||"",url:item.url||"",category:item.category||"",lane:item.lane||"",vibe_tags:item.vibe_tags||[],size:item.size||""};}
 function feedbackAggregates(){
-  const out={liked_brands:{},passed_brands:{},disliked_inventory:{},vibe_tag_scores:{}};
+  const out={liked_brands:{},passed_brands:{},disliked_inventory:{},liked_vibes:{},disliked_vibes:{},vibe_tag_scores:{}};
   const add=(obj,key,n=1)=>{if(key)obj[key]=(obj[key]||0)+n;};
   for(const e of swipeEvents){
     const item=e.item||{},positive=e.verdict==="like"||e.verdict==="keep";
     if(e.verdict==="like")add(out.liked_brands,item.brand);
     if(e.verdict==="pass")add(out.passed_brands,item.brand);
     if(e.verdict==="dislike")add(out.disliked_inventory,[item.brand,item.name].filter(Boolean).join(" | "));
-    for(const tag of item.vibe_tags||[])add(out.vibe_tag_scores,tag,positive?1:-1);
+    for(const tag of item.vibe_tags||[]){add(positive?out.liked_vibes:out.disliked_vibes,tag);add(out.vibe_tag_scores,tag,positive?1:-1);}
   }
   return out;
 }
@@ -828,7 +828,8 @@ function swipeCardHtml(item,depth){
   const src=safeImageUrl(item.image_url);
   const initials=String(item.brand||"?").split(/\s+/).map(x=>x[0]).join("").slice(0,2).toUpperCase();
   const media=src?`<img src="${escapeHtml(src)}" alt="${escapeHtml(`${item.brand} ${item.name}`)}" draggable="false" loading="${depth?"lazy":"eager"}" data-swipe-image />`:`<div class="swipe-fallback" role="img" aria-label="No product photo available">${escapeHtml(initials)}</div>`;
-  const badges=[item.size&&`Size ${item.size}`,item.price&&String(item.price),item.cut].filter(Boolean).map(x=>`<span class="pill">${escapeHtml(x)}</span>`).join("");
+  const displayPrice=typeof item.price==="number"?money(item.price):item.price;
+  const badges=[item.size&&`Size ${item.size}`,displayPrice&&String(displayPrice),item.cut].filter(Boolean).map(x=>`<span class="pill">${escapeHtml(x)}</span>`).join("");
   const link=item.url?`<a class="swipe-link" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">Open product ↗</a>`:"";
   return `<article class="swipe-card${depth===0?" top":""}" data-swipe-id="${escapeHtml(item.id)}" aria-label="${escapeHtml(`${item.brand}, ${item.name}`)}"><div class="swipe-media">${media}<span class="swipe-lane">${escapeHtml(laneLabel(item.lane))}</span><span class="swipe-stamp no">${swipeMode==="closet"?"Didn't like":"Pass"}</span><span class="swipe-stamp yes">${swipeMode==="closet"?"Still good":"Like"}</span></div><div class="swipe-body"><div class="swipe-brand">${escapeHtml(item.brand)}</div><div class="swipe-name">${escapeHtml(item.name)}</div><div class="swipe-badges">${badges}</div><div class="swipe-why">${escapeHtml(item.why||"")}</div>${link}</div></article>`;
 }
@@ -846,6 +847,7 @@ function renderSwipe(){
   const stage=document.getElementById("swipeStage");
   if(!deck.length){stage.innerHTML=`<div class="swipe-empty"><div><strong>${all.length?"You’re all caught up":"No cards available yet"}</strong>${all.length?"You rated every item in this deck. Undo or reset to revisit them.":"Discovery and inventory seeds could not be loaded."}</div></div>`;return;}
   stage.innerHTML=deck.slice(0,3).reverse().map((item,reverseIndex)=>swipeCardHtml(item,Math.min(2,2-reverseIndex))).join("");
+  stage.querySelectorAll("[data-swipe-image]").forEach(img=>img.addEventListener("error",()=>{const brand=(img.alt||"?").split(/\s+/)[0]||"?";const fallback=document.createElement("div");fallback.className="swipe-fallback";fallback.setAttribute("role","img");fallback.setAttribute("aria-label","Product photo unavailable");fallback.textContent=brand.slice(0,2).toUpperCase();img.replaceWith(fallback);},{once:true}));
   bindSwipePointer(stage.querySelector(".swipe-card.top"));
 }
 function announceSwipe(text){document.getElementById("swipeStatus").textContent="";requestAnimationFrame(()=>document.getElementById("swipeStatus").textContent=text);}

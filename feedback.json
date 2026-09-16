@@ -6,6 +6,8 @@
     "liked_brands": {},
     "passed_brands": {},
     "disliked_inventory": {},
+    "liked_vibes": {},
+    "disliked_vibes": {},
     "vibe_tag_scores": {}
   }
 }

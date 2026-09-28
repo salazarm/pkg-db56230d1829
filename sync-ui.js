@@ -1,10 +1,17 @@
 'use strict';
-let unlockKey, syncConfig, baseData, syncBusy=false;
-const syncRuntime={lastAttemptAt:null,lastSuccessAt:null,error:null,service:null,serviceError:null,remembered:false,storageError:null};
+let unlockKey, syncConfig, baseData, syncBusy=false, discoverySnapshot=null;
+const syncRuntime={lastAttemptAt:null,lastSuccessAt:null,error:null,service:null,serviceError:null,remembered:false,storageError:null,discoveryError:null,discoveryFetchedAt:null};
 const enc=new TextEncoder(),dec=new TextDecoder();
 function bytes64(bytes){let s='';for(const b of new Uint8Array(bytes))s+=String.fromCharCode(b);return btoa(s);}
 async function getJSON(path){const r=await fetch(path,{cache:'no-store'});if(!r.ok)throw Error(path+': '+r.status);return r.json();}
 async function readConfig(){const r=await fetch('sync/config.json',{cache:'no-store'});if(r.status===404)return null;if(!r.ok)throw Error('Unable to read sync configuration');return r.json();}
+function applyDiscovery(){
+ if(!APP||!discoverySnapshot)return;
+ APP.discovery=structuredClone(discoverySnapshot);APP.images||={};
+ for(const [i,item] of APP.discovery.items.entries()){
+  if(/^https:\/\//.test(item.imageUrl||'')){item.imageKey='discovery-live-'+i;APP.images[item.imageKey]={url:item.imageUrl};}
+ }
+}
 async function loadBaseline(){const r=await fetch('archive.html');if(!r.ok)throw Error('Unable to load encrypted archive');const html=await r.text();const match=html.match(/const PAYLOAD = (\{[^\n]+\});/);if(!match)throw Error('Encrypted archive is invalid');return JSON.parse(match[1]);}
 async function openWithKey(key,p){
  const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64ToBytes(p.iv)},key,b64ToBytes(p.ct));
@@ -61,7 +68,12 @@ async function refreshUpdates(){
  syncRuntime.lastAttemptAt=new Date().toISOString();syncRuntime.error=null;
  const status=document.getElementById('syncStatus');status.textContent='Checking encrypted updates…';
  try{
-  const results=await Promise.allSettled([readConfig(),getJSON('sync/status.json')]);
+  const results=await Promise.allSettled([readConfig(),getJSON('sync/status.json'),getJSON('discovery.json')]);
+  if(results[2].status==='fulfilled'){
+   const value=results[2].value;
+   if(value.version===1&&Array.isArray(value.items)&&value.items.every(i=>i.name&&/^https:\/\//.test(i.url||''))){discoverySnapshot=value;syncRuntime.discoveryError=null;syncRuntime.discoveryFetchedAt=new Date().toISOString();}
+   else syncRuntime.discoveryError='Invalid recommendation data';
+  }else syncRuntime.discoveryError=results[2].reason.message;
   if(results[1].status==='fulfilled'){syncRuntime.service=results[1].value;syncRuntime.serviceError=null;}
   else syncRuntime.serviceError=results[1].reason.message;
   if(results[0].status==='rejected')throw results[0].reason;
@@ -78,18 +90,19 @@ async function refreshUpdates(){
    const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64ToBytes(envelope.iv),additionalData:enc.encode(id)},eventKey,b64ToBytes(envelope.ct));
    const event=JSON.parse(dec.decode(plain));if(event.id!==id)throw Error('Event identity mismatch');events.push(event);
   }
-  APP=TrackerSync.project(baseData,events);syncRuntime.lastSuccessAt=new Date().toISOString();renderAll();renderSyncReview();
+  APP=TrackerSync.project(baseData,events);syncRuntime.lastSuccessAt=new Date().toISOString();applyDiscovery();renderAll();renderSyncReview();
   status.textContent=`${events.length} published email updates loaded · fetched ${new Date().toLocaleTimeString()}${APP.sync.lastEventAt?' · latest event '+new Date(APP.sync.lastEventAt).toLocaleDateString():''}`;
   document.getElementById('syncSetupResult').hidden=true;
  }catch(e){syncRuntime.error=e.message;status.textContent='Updates unavailable: '+e.message+'. Showing the last successfully loaded data.';}
- finally{syncBusy=false;renderFreshness();}
+ finally{syncBusy=false;applyDiscovery();if(activeTab==='discovery')renderDiscovery();renderFreshness();}
 }
 function renderSyncReview(){
  const sync=APP.sync||{reviews:[],financial:[]};
  const root=document.getElementById('syncReview');root.replaceChildren();
  if(sync.reviews.length){const title=document.createElement('h3');title.textContent='Needs review ('+sync.reviews.length+')';root.append(title);}
  for(const e of sync.reviews){const p=document.createElement('p');p.textContent=[e.merchant,e.orderId,e.tracking,e.status,e.note].filter(Boolean).join(' · ');root.append(p);}
- if(sync.financial.length){const p=document.createElement('p');p.textContent='New receipt amounts (separate from historical analytics): '+sync.financial.map(e=>`${e.merchant} ${e.orderId}: ${e.kind||'purchase'} ${Number.isFinite(e.total)?money(e.total):'amount unknown'}`).join('; ');root.append(p);}
+ const summary=APP.analytics?.updateSummary;
+ if(summary?.addedOrders){const p=document.createElement('p');p.textContent=`Analytics includes ${summary.addedOrders} verified new orders (${money(summary.addedSpend)}). Unverified amounts and adjustments stay in Needs review.`;root.append(p);}
 }
 document.getElementById('lockApp').addEventListener('click',lockApp);
 document.getElementById('setupSync').addEventListener('click',setupSync);

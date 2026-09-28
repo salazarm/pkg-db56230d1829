@@ -2,6 +2,7 @@
 (function(root){
 'use strict';
 const ranks={ordered:0,shipped:1,out_for_delivery:2,delivered:3,at_desk:4,picked_up:5};
+const Analytics=typeof module!=='undefined'?require('./sync-analytics.js'):root.TrackerAnalytics;
 const norm=s=>String(s||'').replace(/[^a-z0-9]/gi,'').toLowerCase();
 const track=s=>{s=norm(s);return s.startsWith('420')&&s.length>=27?s.slice(8):s;};
 function validate(e){
@@ -32,7 +33,7 @@ function project(base,events){
    e.items.forEach((i,j)=>{for(let n=0;n<(i.quantity||1);n++)app.inventory.push({id:id+'-'+j+'-'+n,shipmentId:id,name:[i.name,i.color,i.size].filter(Boolean).join(' / '),merchant:e.merchant,orderId:e.orderId,orderDate:ships[id].orderDate,status:'ordered',owner:i.owner||'marco',category:i.category||'other',url:/^https:\/\//.test(i.url||'')?i.url:null,unitPrice:i.unitPrice});});
    touch('shipments',e.occurredAt);touch('inventory',e.occurredAt);
    if(Number.isFinite(e.total))financial.push({...e,type:'financial',kind:'purchase'});
-   else reviews.push({...e,note:'Order added; receipt total needs verification. Spend totals exclude this order.'});
+   else reviews.push({...e,reviewReason:'receipt_total',note:'Order added; receipt total needs verification. Spend totals exclude this order.'});
    continue;
   }
   // A newly shipped order may attach to one entirely unshipped order only with a complete item match.
@@ -63,8 +64,7 @@ function project(base,events){
  app.analytics||={};app.analytics.kpis||={};
  const ss=Object.values(ships),open=ss.filter(s=>s.status!=='picked_up');
  Object.assign(app.analytics.kpis,{openShipments:open.length,openItemQty:open.reduce((n,s)=>n+(s.items||[]).length,0),shipmentCount:ss.length,itemQty:app.inventory.length});
- // Existing financial aggregates remain a clearly dated baseline. New amounts are shown separately.
- return app;
+ return Analytics.project(base,app,ordered);
 }
 const api={validate,project,track};if(typeof module!=='undefined')module.exports=api;else root.TrackerSync=api;
 })(typeof window!=='undefined'?window:this);

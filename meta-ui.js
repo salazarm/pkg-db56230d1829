@@ -1,5 +1,5 @@
 'use strict';
-const APP_RELEASE={version:'2026.09.28.2',date:'2026-09-28',description:'Section freshness, publication status and verified schedules'};
+const APP_RELEASE={version:'2026.09.28.3',date:'2026-09-28',description:'Current recommendations and incremental spending updates'};
 function metaDate(value){
  if(!value)return 'Not recorded';
  const date=new Date(/^\d{4}-\d{2}-\d{2}$/.test(value)?value+'T12:00:00':value);
@@ -14,7 +14,7 @@ function metaAge(value){
 function dataDates(){
  const baseline=baseData||APP||{},sync=APP?.sync||{};
  return {baseline:baseline.board?.updatedAt,shipments:sync.updated?.shipments||baseline.board?.updatedAt,
- inventory:sync.updated?.inventory||baseline.board?.updatedAt,analytics:baseline.analytics?.syncedAt,
+ inventory:sync.updated?.inventory||baseline.board?.updatedAt,analytics:APP?.analytics?.syncedAt||baseline.analytics?.syncedAt,
  discovery:APP?.discovery?.updatedAt||APP?.discovery?.date,latestEvent:sync.lastEventAt};
 }
 function freshnessText(){
@@ -43,6 +43,7 @@ function renderMeta(){
   ['Email check completed',metaDate(email?.lastSuccessfulCheckAt),email?.lastSuccessfulCheckAt?(email.checkMode==='manual'?'Manual reconciliation. ':'Automated check. ')+(email.coverage||'This records an email check, not publication.'):'No successful email check is recorded.'],
   ['Email updates published',metaDate(email?.lastPublishedAt),email?.lastPublishError||'The most recent encrypted batch successfully written to the app.'],
   ['Unresolved email updates',String(APP?.sync?.reviews?.length||0),'Only loaded updates are counted. Unmatched parcels and unverified amounts remain in Needs review.'],
+  ['Recommendations fetched',metaDate(rt.discoveryFetchedAt),rt.discoveryError||'Fetched published recommendations; product research has its own data date.'],
   ['Saved unlock',rt.remembered?'Remembered on this device':'This session only',rt.storageError||'Lock clears the remembered key. The password is never saved.']
  ];
  document.getElementById('metaCards').innerHTML=cards.map(([title,value,detail])=>`<article class="meta-card"><h3>${h(title)}</h3><div class="meta-value">${h(value)}</div><p class="meta-help">${h(detail)}</p></article>`).join('');
@@ -50,9 +51,9 @@ function renderMeta(){
   ['Shipments',d.shipments,'Saved ledger plus matched order, shipping, delivery and pickup events.'],
   ['Inventory',d.inventory,'Order additions and matched shipment status changes. Shares the initial ledger snapshot.'],
   ['Calendar',d.shipments,'Uses shipment order dates, shipping dates, ETAs and desk arrivals. No separate calendar feed.'],
-  ['Analytics · spending',d.analytics,'Historical financial snapshot. New receipt amounts appear separately under Email updates.'],
+  ['Analytics · spending',d.analytics,'Saved financial snapshot plus verified new order receipts. Unverified totals and adjustments stay in Needs review.'],
   ['Analytics · counts',d.shipments,'Open package and item counts are recalculated from loaded shipments and inventory.'],
-  ['Discovery',d.discovery,'Saved recommendations. No automatic refresh is configured.']
+  ['Discovery',d.discovery,'Product prices, photos and size stock checked on the recorded date. Loaded on app refresh; recommendation research is manual.']
  ];
  document.getElementById('metaSections').innerHTML=rows.map(([title,date,detail])=>`<tr><td>${h(title)}</td><td>${h(metaDate(date))}<p class="meta-help">${h(metaAge(date))}</p></td><td>${h(detail)}</td></tr>`).join('');
  const schedules=[

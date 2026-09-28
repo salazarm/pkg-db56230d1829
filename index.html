@@ -359,6 +359,7 @@ footer.app-footer{padding:0 var(--pad) 16px;color:var(--muted);font-size:.68rem}
 
   <section class="view" id="view-analytics">
     <div class="stack">
+      <p class="freshness-note" id="analyticsFreshness"></p>
       <section class="kpis" id="kpis"></section>
       <section class="grid-2">
         <div class="panel">
@@ -412,7 +413,7 @@ footer.app-footer{padding:0 var(--pad) 16px;color:var(--muted);font-size:.68rem}
 <div class="lightbox" id="lightbox" aria-hidden="true">
   <div class="lb-card" role="dialog" aria-modal="true" aria-label="Product photo">
     <button type="button" class="lb-close" id="lbClose" aria-label="Close">✕</button>
-    <img id="lbImg" alt="" />
+    <img referrerpolicy="no-referrer" id="lbImg" alt="" />
     <div class="lb-meta">
       <div class="name" id="lbName"></div>
       <div class="sub" id="lbSub"></div>
@@ -504,8 +505,10 @@ function renderTotals(ships){const el=document.getElementById("totals");const op
 function renderShipments(){const boardData=APP.board;const q=document.getElementById("q").value.trim().toLowerCase();const sort=document.getElementById("sort").value;const board=document.getElementById("board");board.innerHTML="";const all=Object.values(boardData.shipments||{}).filter(s=>matchesQuery(s,q));const ships=all.filter(s=>shipMatchesPill(s,pillFilter));document.getElementById("subtitle").textContent=`${boardData.building||"1425 Hudson"} · ${boardData.unit||""}`.replace(/\s·\s$/,"");renderTotals(all);renderExpected(ships);renderCounts(all);for(const col of COLS){if(col.key==="picked_up"&&!showPickedUp)continue;const list=sortShips(ships.filter(s=>s.status===col.key),sort);const colEl=document.createElement("section");colEl.className="col";colEl.innerHTML=`<div class="col-head"><div class="col-title"><span class="dot" style="background:${col.color}"></span>${col.label}</div><span class="count">${list.length}</span></div>`;const cards=document.createElement("div");cards.className="cards";cards.innerHTML=list.length?list.map(renderCard).join(""):`<div class="empty">${pillFilter?"No matches for this filter":"Nothing here"}</div>`;colEl.appendChild(cards);board.appendChild(colEl);}const n=all.filter(s=>s.status==="picked_up").length;document.getElementById("togglePicked").textContent=showPickedUp?`Hide picked up (${n})`:`Show picked up (${n})`;document.getElementById("footer").textContent=`Ledger ${boardData.updatedAt||"—"} · Analytics ${(APP.analytics&&APP.analytics.syncedAt)||"—"}`;}
 
 function imageSrc(key){
-  if(!key||!APP.images||!APP.images[key]||!APP.images[key].b64) return null;
+  if(!key||!APP.images||!APP.images[key]) return null;
   const im=APP.images[key];
+  if(/^https:\/\//.test(im.url||''))return im.url;
+  if(!im.b64)return null;
   return `data:${im.mime||"image/jpeg"};base64,${im.b64}`;
 }
 function thumbHtml(key, cls){
@@ -585,8 +588,9 @@ function drawSpendChart(series){
   series.forEach((s,i)=>{if(i%step&&i!==n-1)return;ctx.fillText((s.day||"").slice(5),pad.l+i*(bw+gap)+bw/2,cssH-6);});
 }
 function renderAnalytics(){
-  const DATA=APP.analytics||{};const k=DATA.kpis||{};
-  document.getElementById("kpis").innerHTML=[["Historical spend",money(k.totalSpend), (k.orderCount||0)+" orders"],["Avg order",money(k.avgOrder),"known totals"],["Open items",String(k.openItemQty??0),(k.openShipments??0)+" open pkgs"],["All items",String(k.itemQty??0),(k.shipmentCount??0)+" shipments"]].map(([l,v,s])=>`<div class="kpi"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`).join("");
+  const DATA=APP.analytics||{};const k=DATA.kpis||{},summary=DATA.updateSummary;
+  document.getElementById('analyticsFreshness').textContent='Financial data: '+metaDate(DATA.syncedAt)+'. '+(summary?`${summary.addedOrders} verified new orders included; ${summary.excludedOrders} orders and ${summary.unresolvedAdjustments} adjustments need review. `:'Saved financial snapshot. ')+'New order totals include tax and fees; category and owner shares are allocated by item price when known, otherwise quantity.';
+  document.getElementById("kpis").innerHTML=[["Tracked spend",money(k.totalSpend), (k.orderCount||0)+" orders"],["Avg order",money(k.avgOrder),"known totals"],["Open items",String(k.openItemQty??0),(k.openShipments??0)+" open pkgs"],["All items",String(k.itemQty??0),(k.shipmentCount??0)+" shipments"]].map(([l,v,s])=>`<div class="kpi"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`).join("");
   const series=DATA.spendByDay||[];document.getElementById("spendMeta").textContent=series.length?`${series[0].day} → ${series[series.length-1].day}`:"—";drawSpendChart(series);
   const cats=[...(DATA.categories||[])].sort((a,b)=>b.spend-a.spend);const maxS=Math.max(...cats.map(c=>c.spend),1);
   document.getElementById("catBars").innerHTML=cats.map(c=>{const m=(c.marcoSpend/maxS)*100,cl=(c.clarrySpend/maxS)*100;return `<div class="bar-row"><div class="name">${c.category}</div><div class="bar-track"><span class="m" style="width:${m}%"></span><span class="c" style="width:${cl}%"></span></div><div class="amt">${money(c.spend)}</div></div>`;}).join("")||`<div class="muted">No categories</div>`;
@@ -690,7 +694,7 @@ function fillDiscTypeOptions(items){
 function renderDiscovery(){
   const d=APP.discovery||{};
   document.getElementById("discTitle").textContent=d.title||"Discovery";
-  document.getElementById("discNote").textContent=d.note||"Saved recommendations — see the date below.";
+  document.getElementById("discNote").textContent=(d.note||"Saved recommendations — see the date below.")+(syncRuntime.discoveryError?' Refresh failed; showing last loaded recommendations.':'');
   const when=d.date||(d.updatedAt||"").slice(0,10)||"—";
   const all=d.items||[];
   fillDiscTypeOptions(all);
@@ -725,7 +729,7 @@ function renderDiscovery(){
   if(!all.length){grid.innerHTML=`<div class="muted">No recommendations yet for today.</div>`;return;}
   if(!items.length){grid.innerHTML=`<div class="muted">No picks match these filters.</div>`;return;}
   grid.innerHTML=items.map((it,i)=>{
-    const img=it.imageKey&&APP.images&&APP.images[it.imageKey]?`<img src="${imageSrc(it.imageKey)}" alt="" data-disc-idx="${i}" />`:`<div class="thumb ph" style="width:100%;aspect-ratio:1/1;border:0;border-radius:0">No photo</div>`;
+    const img=it.imageKey&&APP.images&&APP.images[it.imageKey]?`<img src="${escapeHtml(imageSrc(it.imageKey))}" alt="${escapeHtml(it.name)}" loading="lazy" referrerpolicy="no-referrer" data-disc-idx="${i}" />`:`<div class="thumb ph" style="width:100%;aspect-ratio:1/1;border:0;border-radius:0">No photo</div>`;
     const price=it.price!=null?`<span class="price">${money(it.price)}</span>`:`<span></span>`;
     const link=it.url?`<a class="open" href="${escapeHtml(it.url)}" target="_blank" rel="noopener noreferrer">Open ↗</a>`:`<span class="pill">No link</span>`;
     const newTag=it.is_new_brand?`<span class="pill" style="color:var(--eta);border-color:color-mix(in srgb,var(--eta) 40%,var(--border))">New brand</span>`:"";
@@ -768,16 +772,17 @@ function collectCalEvents(){
     // ETA / due-today from carrier or arrive-today emails (stored on ship.eta)
     if(ship.status==="ordered"||ship.status==="shipped"||ship.status==="out_for_delivery"){
       const ek=dateKey(ship.eta);
-      if(ek) push(ship.eta, ship, ek===today||ship.status==="out_for_delivery"?"due":"eta");
+      if(ek) push(ship.eta, ship, ek<today?"overdue":ek===today?"due":"eta");
     }
     if(ship.status!=="ordered") push(ship.shipDate, ship, "ship");
+    if(ship.status==="delivered")push(ship.deliveredAt,ship,"delivered");
     const desk=ship.deskMatch||{};
     // "At desk" is current state only
     if(ship.status==="at_desk") push(desk.arrivedAt, ship, "desk");
   }
   return map;
 }
-function kindLabel(k){return ({order:"Ordered",eta:"ETA",due:"Due / arriving",ship:"Shipped",desk:"At desk now"})[k]||k;}
+function kindLabel(k){return ({order:"Ordered",eta:"ETA",due:"Due / arriving",overdue:"Past ETA · no delivery confirmation",delivered:"Carrier delivered",ship:"Shipped",desk:"At desk now"})[k]||k;}
 function renderCalendar(){
   ensureCalCursor();
   const events=collectCalEvents();
@@ -815,7 +820,7 @@ function renderCalendar(){
     if(localKey===calSelected) cls.push("selected");
     // dedupe chips by ship+kind, show up to 3
     const chips=list.slice(0,3).map(ev=>{
-      const label=ev.kind==="order"?"Ord":ev.kind==="due"?"Due":ev.kind==="eta"?"ETA":ev.kind==="ship"?"Ship":"Desk";
+      const label=({order:'Ord',due:'Due',eta:'ETA',overdue:'Past ETA',delivered:'Delivered',ship:'Ship',desk:'Desk'})[ev.kind];
       const kk=ev.kind==="order"?"ord":ev.kind;
       return `<span class="cal-chip ${kk}">${escapeHtml(label+" · "+(ev.ship.merchant||"?"))}</span>`;
     }).join("");
@@ -1012,8 +1017,9 @@ function showApp(data){
 function b64ToBytes(b64){return Uint8Array.from(atob(b64),c=>c.charCodeAt(0));}
 async function deriveKey(password,salt,iter){const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveKey']);return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:iter,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);}
 </script>
-<script src="sync-engine.js?v=20260928.1"></script>
+<script src="sync-analytics.js?v=20260928.3"></script>
+<script src="sync-engine.js?v=20260928.3"></script>
 <script src="remember-unlock.js?v=20260928.1"></script>
-<script src="meta-ui.js?v=20260928.2"></script>
-<script src="sync-ui.js?v=20260928.1"></script>
+<script src="meta-ui.js?v=20260928.3"></script>
+<script src="sync-ui.js?v=20260928.3"></script>
 </body></html>

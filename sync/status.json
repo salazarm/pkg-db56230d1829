@@ -3,10 +3,10 @@
   "verifiedAt": "2026-09-28T16:16:23.907886+00:00",
   "email": {
     "state": "awaiting_publication_approval",
-    "lastSuccessfulCheckAt": "2026-09-28T16:15:00.807187+00:00",
+    "lastSuccessfulCheckAt": "2026-09-28T17:57:27.359825+00:00",
     "lastPublishedAt": null,
     "checkMode": "manual",
-    "coverage": "Transaction email search through September 28, 2026; ambiguous matches remain in Needs review.",
+    "coverage": "Manual transaction-email reconciliation since September 17, 2026. Prepared changes are not yet published; unresolved matches require review.",
     "lastPublishError": "Automatic approval review blocked publication of the encrypted email batch. Approval to publish the email data is still required; the encrypted sync key is already published."
   },
   "obey": {

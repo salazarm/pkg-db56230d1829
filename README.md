@@ -4,12 +4,14 @@ The existing shipment, inventory, calendar, discovery and analytics views now us
 
 ## Status
 
-GitHub write access was verified on September 28, 2026. The encrypted update app is deployed to GitHub Pages. The Meta tab separates data dates, browser fetches and email monitoring status. Email automation is not enabled until the app's encryption setup and first update batch have been verified. The encrypted key and Meta tab are published. Automatic review separately blocked the initial encrypted email batch pending explicit approval to publish the encrypted Gmail-derived data. The prepared batch contains 24 events, including an additional verified carrier update. No email automation is active.
+GitHub write access was verified on September 28, 2026. The encrypted update app is deployed to GitHub Pages. The Meta tab separates data dates, browser fetches and email monitoring status. Email automation is not enabled until the app's encryption setup and first update batch have been verified. The encrypted key and Meta tab are published. Automatic review separately blocked the initial encrypted email batch pending explicit approval to publish the encrypted Gmail-derived data. The prepared batch contains 30 events, including verified carrier, desk, pickup and exact receipt updates. No email automation is active.
 
 ## Design
 
 - `archive.html`: byte-for-byte copy of the previous index, retaining the encrypted baseline and rollback path.
 - `index.html`: existing views with separate data loading, encrypted update controls, delivery column and review panel.
+- `discovery.json`: public product recommendations with prices, photo URLs and XXL availability, checked independently from email updates.
+- `sync-analytics.js`: integrates verified new orders into financial totals and charts without duplicating baseline purchases; missing or conflicting totals and refunds remain in review.
 - `sync-engine.js`: deterministic event projection, conservative parcel matching, duplicate protection, monotonic shipment status and inventory propagation.
 - `meta-ui.js`: displays section freshness, browser refresh health, release version and recorded schedules. `sync/status.json` records service configuration; unavailable or unrecorded check times stay explicit.
 - `remember-unlock.js`: optionally stores a non-exportable AES-GCM CryptoKey in IndexedDB on this browser. Lock deletes it. No password is stored.
@@ -35,13 +37,17 @@ Each input needs `sourceMessageId`, `eventKey`, `type`, and ISO `occurredAt`. Th
 
 - `order`: `merchant`, `orderId`, `orderDate`, `items` with name, optional color/size/category/owner/unitPrice/url, quantity (1–50), optional verified `total`.
 - `shipment`: `tracking` strongly preferred, merchant/orderId, status, optional shipDate, deliveredAt, arrivedAt, pickedUpAt, eta (exact date or null), estimateText. Without a unique match it becomes a review item. New tracking attaches to an unshipped order only when all item names/variants/quantities match.
-- `financial`: verified receipt/refund amount and kind; shown separately from historical analytics.
+- `financial`: verified receipt/refund amount, currency and kind. Purchase receipts matched to new orders update analytics; unmatched/conflicting totals and refunds remain in review.
 - `review`: unresolved merchant/order/tracking and a concise note; changes no shipment.
 
-Carrier delivery, building receipt, and resident pickup are distinct. An old message cannot regress status. Full split-shipment allocation, ambiguous refunds/cancellations, and uncertain totals are intentionally reviewed rather than guessed. Historical financial charts remain dated baseline data; new financial amounts are shown separately and not silently blended into owner/category totals.
+Carrier delivery, building receipt, and resident pickup are distinct. An old message cannot regress status. Full split-shipment allocation, ambiguous refunds/cancellations, and uncertain totals are intentionally reviewed rather than guessed. Financial charts retain the original baseline and incorporate verified new orders exactly once. New receipt totals are allocated across categories and owners by item price (or quantity when prices are missing); rounding uses integer cents. Unverified order amounts, baseline corrections and refunds require review.
 
 ## Validation
 
 `node --test tests/*.test.cjs`
 
 Includes split shipments, replay, out-of-order status, ambiguous matches, USPS normalization, invalid input, browser-compatible encryption round-trip, envelope tampering and CLI deduplication. Core event/encryption tests and freshness regression checks pass. Live release validation includes the Meta tab, calendar notice, remembered unlock and Lock behavior.
+
+## September 28 refresh
+
+Nine public product recommendations were refreshed with price, image and XXL/2XL stock checks. Calendar distinguishes past ETAs from due-today dates and shows known carrier delivery dates. Thirty encrypted email events remain prepared but unpublished pending explicit publication approval; cancelled browser unlock prevented live private-data validation. No timestamps claim those pending events have been applied.

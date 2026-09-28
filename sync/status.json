@@ -1,13 +1,18 @@
 {
   "version": 1,
-  "verifiedAt": "2026-09-28T16:04:24Z",
+  "verifiedAt": "2026-09-28T16:16:23.907886+00:00",
   "email": {
-    "state": "awaiting_approval",
-    "lastSuccessfulCheckAt": null,
-    "lastPublishedAt": null
+    "state": "awaiting_publication_approval",
+    "lastSuccessfulCheckAt": "2026-09-28T16:15:00.807187+00:00",
+    "lastPublishedAt": null,
+    "checkMode": "manual",
+    "coverage": "Transaction email search through September 28, 2026; ambiguous matches remain in Needs review.",
+    "lastPublishError": "Automatic approval review blocked publication of the encrypted email batch. Approval to publish the email data is still required; the encrypted sync key is already published."
   },
   "obey": {
     "state": "enabled",
-    "schedule": "Daily around 7:04 p.m. America/New_York. Actual run time may vary."
+    "schedule": "Daily condition watch around 7:04 p.m. Eastern during daylight saving time (23:04 UTC). Actual run time may vary.",
+    "lastRunAt": "2026-09-27T22:41:46.861879+00:00",
+    "nextRunAt": null
   }
 }

@@ -4,7 +4,7 @@ The existing shipment, inventory, calendar, discovery and analytics views now us
 
 ## Status
 
-GitHub write access was verified on September 28, 2026. The encrypted update app is deployed to GitHub Pages. The Meta tab separates data dates, browser fetches and email monitoring status. Email automation is not enabled until the app's encryption setup and first update batch have been verified. The initial encrypted email batch remains unpublished pending explicit approval.
+GitHub write access was verified on September 28, 2026. The encrypted update app is deployed to GitHub Pages. The Meta tab separates data dates, browser fetches and email monitoring status. Email automation is not enabled until the app's encryption setup and first update batch have been verified. The encrypted key and Meta tab are published. Automatic review separately blocked the initial encrypted email batch pending explicit approval to publish the encrypted Gmail-derived data. The prepared batch contains 24 events, including an additional verified carrier update. No email automation is active.
 
 ## Design
 

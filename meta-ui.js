@@ -1,5 +1,5 @@
 'use strict';
-const APP_RELEASE={version:'2026.09.28.1',date:'2026-09-28',description:'Freshness, schedules and remembered unlock'};
+const APP_RELEASE={version:'2026.09.28.2',date:'2026-09-28',description:'Section freshness, publication status and verified schedules'};
 function metaDate(value){
  if(!value)return 'Not recorded';
  const date=new Date(/^\d{4}-\d{2}-\d{2}$/.test(value)?value+'T12:00:00':value);
@@ -32,13 +32,17 @@ function renderMeta(){
  if(!APP)return;
  const d=dataDates(),rt=syncRuntime,service=rt.service,email=service?.email,obey=service?.obey;
  const h=escapeHtml;
- const emailState=email?.state==='active'?'Email monitoring active':email?.state==='awaiting_approval'?'Email monitoring inactive':'Email monitoring status unknown';
+ const emailActive=email?.state==='active';
+ const emailBlocked=['awaiting_approval','awaiting_publication_approval'].includes(email?.state);
+ const emailState=emailActive?'Email monitoring active':emailBlocked?'Email monitoring inactive · publication blocked':email?.state==='awaiting_verification'?'Email monitoring inactive · verification pending':'Email monitoring status unknown';
  document.getElementById('metaState').textContent=emailState;
  document.getElementById('metaSummary').textContent=freshnessText();
  const cards=[
   ['Latest shipment change',metaDate(d.shipments),metaAge(d.shipments)],
   ['Published updates fetched',metaDate(rt.lastSuccessAt),rt.error?'Latest attempt failed: '+rt.error:'A browser refresh fetches saved updates. It does not check Gmail.'],
-  ['Email check completed',metaDate(email?.lastSuccessfulCheckAt),email?.state==='awaiting_approval'?'Waiting for approval to publish encrypted email updates.':email?.state==='active'?'New matching messages trigger a check.':'No successful automated email check is recorded.'],
+  ['Email check completed',metaDate(email?.lastSuccessfulCheckAt),email?.lastSuccessfulCheckAt?(email.checkMode==='manual'?'Manual reconciliation. ':'Automated check. ')+(email.coverage||'This records an email check, not publication.'):'No successful email check is recorded.'],
+  ['Email updates published',metaDate(email?.lastPublishedAt),email?.lastPublishError||'The most recent encrypted batch successfully written to the app.'],
+  ['Unresolved email updates',String(APP?.sync?.reviews?.length||0),'Only loaded updates are counted. Unmatched parcels and unverified amounts remain in Needs review.'],
   ['Saved unlock',rt.remembered?'Remembered on this device':'This session only',rt.storageError||'Lock clears the remembered key. The password is never saved.']
  ];
  document.getElementById('metaCards').innerHTML=cards.map(([title,value,detail])=>`<article class="meta-card"><h3>${h(title)}</h3><div class="meta-value">${h(value)}</div><p class="meta-help">${h(detail)}</p></article>`).join('');
@@ -53,8 +57,8 @@ function renderMeta(){
  document.getElementById('metaSections').innerHTML=rows.map(([title,date,detail])=>`<tr><td>${h(title)}</td><td>${h(metaDate(date))}<p class="meta-help">${h(metaAge(date))}</p></td><td>${h(detail)}</td></tr>`).join('');
  const schedules=[
   ['App refresh','On unlock, every 5 minutes while the tab is visible, and when you press Refresh updates.',rt.lastAttemptAt?'Last attempted '+metaDate(rt.lastAttemptAt)+(rt.error?' · failed':''):'Not attempted this session'],
-  ['Email monitoring',email?.state==='active'?'When new matching purchase or delivery messages arrive. No fixed daily time.':'Inactive. Intended to run when matching purchase or delivery emails arrive.',email?.lastSuccessfulCheckAt?'Last completed '+metaDate(email.lastSuccessfulCheckAt):'No completed automated check recorded'],
-  ['OBEY release watch',obey?.schedule||'Separate from this app; schedule not available.',obey?'Enabled as of '+metaDate(service.verifiedAt)+'. Does not refresh Discovery, shipments or Calendar.':'Status unavailable'],
+  ['Email monitoring',emailActive?'When new matching purchase or delivery messages arrive. No fixed daily time.':'Inactive. Intended to run when matching purchase or delivery emails arrive.',emailActive?'Next check: when a matching message arrives.':emailBlocked?'Activation is waiting for encrypted email publication approval.':'Activation has not been verified.'],
+  ['OBEY release watch',obey?.schedule||'Separate from this app; schedule not available.',obey?'Recorded status: '+obey.state+'. Last run '+metaDate(obey.lastRunAt)+'. '+(obey.nextRunAt?'Next run '+metaDate(obey.nextRunAt)+'.':'The scheduler did not provide an exact next run time.')+' Does not refresh Discovery, shipments or Calendar.':'Status unavailable'],
  ];
  document.getElementById('metaSchedule').innerHTML=schedules.map(row=>'<tr>'+row.map(cell=>'<td>'+h(cell)+'</td>').join('')+'</tr>').join('');
  document.getElementById('metaStatusDate').textContent=(service?'Schedule configuration last verified '+metaDate(service.verifiedAt)+'. ':'Schedule configuration could not be loaded. ')+(rt.serviceError?'Status refresh failed: '+rt.serviceError+'. ':'')+'These are recorded service details, not a live connection to the automation scheduler.';

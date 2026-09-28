@@ -16,3 +16,7 @@ Deduplicate using the SHA-256 of source Gmail message ID, a NUL byte and stable 
 Prepare plaintext only in a private temporary directory outside the repo. Encrypt through scripts/seal-event.cjs with the published public key. Commit ONLY new encrypted envelopes and a manifest merged with the latest remote manifest, in one atomic GitHub tree/commit/ref update. Use current main as parent, non-forced update, and retry merges on conflicts. No plaintext email bodies, message IDs, merchant names, orders, tracking numbers, addresses, passwords, tokens, or private keys belong in public files or commit messages.
 
 Confirm the remote commit contains the expected opaque event IDs. Do not claim a live app update on a failed write. Notify the user only for a blocker or an unresolved case requiring their input; otherwise finish silently. Do not create a second automation or alter the separate OBEY release watch.
+
+## Freshness metadata
+
+Once activation is approved and verified, record email.state as active in sync/status.json. After a successful email check, update email.lastSuccessfulCheckAt and verifiedAt with the completion time; update email.lastPublishedAt only when an encrypted batch was actually published. Keep service metadata free of message IDs, sender names, orders, tracking numbers and message content. Preserve unrelated status fields. Publish metadata in the same atomic commit when adding events. A browser fetch timestamp is never evidence that Gmail was checked. Reviews and financial-only events must not advance shipment/calendar freshness.

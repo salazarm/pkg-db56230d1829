@@ -197,17 +197,35 @@ footer.app-footer{padding:0 var(--pad) 16px;color:var(--muted);font-size:.68rem}
 .disc-brands .count-pill{cursor:pointer}
 .disc-brands .count-pill.active{background:color-mix(in srgb,var(--accent) 18%,var(--panel-2));border-color:color-mix(in srgb,var(--accent) 45%,var(--border));color:var(--accent)}
 .disc-toolbar .controls{display:flex;flex-wrap:wrap;gap:8px;margin:0;padding:0;border:0;background:transparent;box-shadow:none}
+.freshness-note{margin:0 0 12px;padding:10px 12px;border-left:3px solid var(--eta);background:var(--panel-2);color:var(--text);font-size:.78rem;line-height:1.55}
+.freshness-note a,#view-meta a{color:var(--accent)}
+.meta-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:8px}
+.meta-card{padding:14px;background:var(--panel-2);border:1px solid var(--border);border-radius:10px}
+.meta-card h3{margin:0 0 8px;font-size:.75rem;color:var(--muted);font-weight:600}
+.meta-value{font-size:1rem;font-weight:650;line-height:1.5}
+.meta-help{font-size:.75rem;color:var(--muted);line-height:1.5;margin:6px 0 0}
+.meta-table-wrap{overflow-x:auto}.meta-table{min-width:620px;font-size:.8rem}
+.meta-table th,.meta-table td{padding:12px 10px;vertical-align:top;line-height:1.5}
+.meta-table td:first-child{font-weight:650;min-width:130px}.meta-table .meta-help{max-width:360px}
+.meta-state{display:inline-block;border:1px solid var(--eta);color:var(--eta);border-radius:999px;padding:4px 9px;font-size:.72rem}
+#view-meta .panel{padding:16px}#view-meta .panel-head h2{font-size:.8rem}
+#view-meta .stack{gap:12px}#view-meta .panel-head{margin-bottom:12px}
+.gate-card .remember{display:flex;gap:8px;align-items:center;margin:0 0 8px;color:var(--text);font-size:.8rem}
+.gate-card .remember input{width:auto;min-height:0;margin:0}.gate-card .remember-help{font-size:.7rem;line-height:1.5}
+#syncPanel button{background:var(--panel-2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font:inherit;cursor:pointer}
 </style>
 </head>
 <body>
 <section id="syncPanel" hidden style="margin:16px;padding:16px;border:1px solid #39435a;border-radius:12px;background:#111827;color:#e5e7eb">
-<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><strong>Email updates</strong><span id="syncStatus" role="status" aria-live="polite"></span><button id="refreshSync" type="button">Refresh updates</button><button id="setupSync" type="button" hidden>Set up encrypted updates</button></div>
+<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><strong>Email updates</strong><span id="syncStatus" role="status" aria-live="polite"></span><button id="lockApp" type="button">Lock</button><button id="refreshSync" type="button">Refresh updates</button><button id="setupSync" type="button" hidden>Set up encrypted updates</button></div>
 <div id="syncReview"></div><details id="syncSetupResult" hidden open><summary>Encrypted sync configuration</summary><p>This contains a public encryption key and a password-encrypted private key. Save it as sync/config.json.</p><pre id="syncConfigOutput" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:180px;overflow:auto"></pre></details>
 </section>
 <div id="gate">
   <form class="gate-card" id="gateForm">
     <h1>1425 packages</h1>
     <p>Enter the shared password to open the app.</p>
+    <label class="remember"><input type="checkbox" id="rememberUnlock" checked /> Remember on this device</label>
+    <p class="remember-help">Anyone using this browser can open the app while remembered. Lock clears the saved unlock.</p>
     <div class="err" id="err"></div>
     <input id="pw" type="password" autocomplete="current-password" placeholder="Password" autofocus />
     <button type="submit">Unlock</button>
@@ -265,6 +283,7 @@ footer.app-footer{padding:0 var(--pad) 16px;color:var(--muted);font-size:.68rem}
       <button type="button" class="tab" data-tab="calendar" role="tab" aria-selected="false">Calendar</button>
       <button type="button" class="tab" data-tab="discovery" role="tab" aria-selected="false">Discovery</button>
       <button type="button" class="tab" data-tab="analytics" role="tab" aria-selected="false">Analytics</button>
+      <button type="button" class="tab" data-tab="meta" role="tab" aria-selected="false">Meta</button>
     </div>
   </header>
 
@@ -304,6 +323,7 @@ footer.app-footer{padding:0 var(--pad) 16px;color:var(--muted);font-size:.68rem}
     <div class="stack">
       <section class="panel">
         <div class="panel-head"><h2>Calendar</h2><div class="meta" id="calMeta"></div></div>
+        <p class="freshness-note"><span id="calFreshness">Checking data dates…</span> <a href="#meta" id="calFreshnessLink">View freshness &amp; schedule →</a></p>
         <div class="cal-legend"><span><i class="ord"></i>Ordered</span><span><i class="eta"></i>ETA</span><span><i class="due"></i>Due / arriving</span><span><i class="ship"></i>Shipped</span><span><i class="desk"></i>At desk now</span></div>
         <div class="cal-grid" id="calGrid"></div>
       </section>
@@ -366,6 +386,29 @@ footer.app-footer{padding:0 var(--pad) 16px;color:var(--muted);font-size:.68rem}
   </section>
 
   
+<section class="view" id="view-meta">
+  <div class="stack">
+    <section class="panel">
+      <div class="panel-head"><h2>Freshness &amp; schedule</h2><span class="meta-state" id="metaState">Checking status</span></div>
+      <p class="freshness-note" id="metaSummary"></p>
+      <div class="meta-cards" id="metaCards"></div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>Data by section</h2></div>
+      <div class="meta-table-wrap"><table class="meta-table"><thead><tr><th scope="col">Section</th><th scope="col">Data date</th><th scope="col">How it updates</th></tr></thead><tbody id="metaSections"></tbody></table></div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>Schedule</h2></div>
+      <div class="meta-table-wrap"><table class="meta-table"><thead><tr><th scope="col">Process</th><th scope="col">When it runs</th><th scope="col">Latest recorded status</th></tr></thead><tbody id="metaSchedule"></tbody></table></div>
+      <p class="meta-help" id="metaStatusDate"></p>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>App updates</h2><a href="https://github.com/salazarm/pkg-db56230d1829/commits/main/" target="_blank" rel="noopener noreferrer">Code history ↗</a></div>
+      <p id="metaRelease"></p>
+      <p class="meta-help">Added section freshness, refresh health, schedules and a calendar data notice. Remembered unlocks stay on this device until you lock the app or clear browser data. Email changes are applied locally after decryption; unresolved matches appear in Needs review.</p>
+    </section>
+  </div>
+</section>
 <div class="lightbox" id="lightbox" aria-hidden="true">
   <div class="lb-card" role="dialog" aria-modal="true" aria-label="Product photo">
     <button type="button" class="lb-close" id="lbClose" aria-label="Close">✕</button>
@@ -831,9 +874,10 @@ function setTab(tab){
   if(tab==="calendar") renderCalendar();
   if(tab==="discovery") renderDiscovery();
   if(tab==="analytics") renderAnalytics();
+  if(tab==="meta") renderMeta();
   history.replaceState(null,"",`#${tab}`);
 }
-function renderAll(){setTab(activeTab);}
+function renderAll(){setTab(activeTab);renderFreshness();}
 
 function wire(){
   const discBrandHost=document.getElementById("discBrandPills");
@@ -869,6 +913,7 @@ function wire(){
   }
 
   document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>setTab(b.dataset.tab)));
+  document.getElementById("calFreshnessLink").addEventListener("click",e=>{e.preventDefault();setTab("meta");});
   document.getElementById("q").addEventListener("input",()=>renderShipments());
   document.getElementById("sort").addEventListener("change",()=>renderShipments());
   document.getElementById("togglePicked").addEventListener("click",()=>{showPickedUp=!showPickedUp;renderShipments();});
@@ -953,7 +998,7 @@ function wire(){
     }
   });
   const hash=(location.hash||"").replace("#","");
-  if(["shipments","inventory","calendar","discovery","analytics"].includes(hash)) activeTab=hash;
+  if(["shipments","inventory","calendar","discovery","analytics","meta"].includes(hash)) activeTab=hash;
 }
 
 function showApp(data){
@@ -967,6 +1012,8 @@ function showApp(data){
 function b64ToBytes(b64){return Uint8Array.from(atob(b64),c=>c.charCodeAt(0));}
 async function deriveKey(password,salt,iter){const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveKey']);return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:iter,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);}
 </script>
-<script src="sync-engine.js"></script>
-<script src="sync-ui.js"></script>
+<script src="sync-engine.js?v=20260928.1"></script>
+<script src="remember-unlock.js?v=20260928.1"></script>
+<script src="meta-ui.js?v=20260928.1"></script>
+<script src="sync-ui.js?v=20260928.1"></script>
 </body></html>

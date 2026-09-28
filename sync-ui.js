@@ -1,16 +1,42 @@
 'use strict';
 let unlockKey, syncConfig, baseData, syncBusy=false;
+const syncRuntime={lastAttemptAt:null,lastSuccessAt:null,error:null,service:null,serviceError:null,remembered:false,storageError:null};
 const enc=new TextEncoder(),dec=new TextDecoder();
 function bytes64(bytes){let s='';for(const b of new Uint8Array(bytes))s+=String.fromCharCode(b);return btoa(s);}
 async function getJSON(path){const r=await fetch(path,{cache:'no-store'});if(!r.ok)throw Error(path+': '+r.status);return r.json();}
 async function readConfig(){const r=await fetch('sync/config.json',{cache:'no-store'});if(r.status===404)return null;if(!r.ok)throw Error('Unable to read sync configuration');return r.json();}
 async function loadBaseline(){const r=await fetch('archive.html');if(!r.ok)throw Error('Unable to load encrypted archive');const html=await r.text();const match=html.match(/const PAYLOAD = (\{[^\n]+\});/);if(!match)throw Error('Encrypted archive is invalid');return JSON.parse(match[1]);}
-async function unlock(password){
- const p=await loadBaseline();const key=await deriveKey(password,b64ToBytes(p.salt),p.iter);
+async function openWithKey(key,p){
  const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64ToBytes(p.iv)},key,b64ToBytes(p.ct));
  baseData=JSON.parse(dec.decode(plain));unlockKey=key;
+}
+async function unlock(password){
+ const p=await loadBaseline();const key=await deriveKey(password,b64ToBytes(p.salt),p.iter);
+ await openWithKey(key,p);
+ try{
+  if(document.getElementById('rememberUnlock').checked){await RememberUnlock.save(key);syncRuntime.remembered=true;}
+  else{await RememberUnlock.clear();syncRuntime.remembered=false;}
+  syncRuntime.storageError=null;
+ }catch(_){syncRuntime.storageError='This browser could not update its saved unlock. Use Lock to retry clearing it.';}
  showApp(baseData);document.getElementById('syncPanel').hidden=false;
  await refreshUpdates();
+}
+async function restoreRemembered(){
+ const err=document.getElementById('err'),submit=document.querySelector('#gateForm button[type=submit]');
+ submit.disabled=true;
+ try{
+  const key=await RememberUnlock.read();if(!key)return;
+  err.textContent='Restoring remembered unlock…';
+  await openWithKey(key,await loadBaseline());syncRuntime.remembered=true;
+  showApp(baseData);document.getElementById('syncPanel').hidden=false;err.textContent='';
+  await refreshUpdates();
+ }catch(_){err.textContent='Could not restore the saved unlock. Enter your password to continue.';}
+ finally{submit.disabled=false;}
+}
+async function lockApp(){
+ const button=document.getElementById('lockApp');button.disabled=true;
+ try{await RememberUnlock.clear();localStorage.removeItem('pkg_board_pw');location.reload();}
+ catch(_){document.getElementById('syncStatus').textContent='Could not clear the remembered unlock. Clear this site’s browser data to lock it.';button.disabled=false;}
 }
 async function setupSync(){
  const button=document.getElementById('setupSync');button.disabled=true;
@@ -31,10 +57,15 @@ async function setupSync(){
  }catch(e){document.getElementById('syncStatus').textContent=e.message;button.disabled=false;}
 }
 async function refreshUpdates(){
- if(syncBusy)return;syncBusy=true;
+ if(syncBusy||!baseData)return;syncBusy=true;
+ syncRuntime.lastAttemptAt=new Date().toISOString();syncRuntime.error=null;
  const status=document.getElementById('syncStatus');status.textContent='Checking encrypted updates…';
  try{
-  syncConfig=await readConfig();document.getElementById('setupSync').hidden=!!syncConfig;
+  const results=await Promise.allSettled([readConfig(),getJSON('sync/status.json')]);
+  if(results[1].status==='fulfilled'){syncRuntime.service=results[1].value;syncRuntime.serviceError=null;}
+  else syncRuntime.serviceError=results[1].reason.message;
+  if(results[0].status==='rejected')throw results[0].reason;
+  syncConfig=results[0].value;document.getElementById('setupSync').hidden=!!syncConfig;
   if(!syncConfig){status.textContent='Email updates need encryption setup.';return;}
   const raw=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64ToBytes(syncConfig.privateKey.iv)},unlockKey,b64ToBytes(syncConfig.privateKey.ct));
   const privateKey=await crypto.subtle.importKey('pkcs8',raw,{name:'RSA-OAEP',hash:'SHA-256'},false,['decrypt']);
@@ -47,11 +78,11 @@ async function refreshUpdates(){
    const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64ToBytes(envelope.iv),additionalData:enc.encode(id)},eventKey,b64ToBytes(envelope.ct));
    const event=JSON.parse(dec.decode(plain));if(event.id!==id)throw Error('Event identity mismatch');events.push(event);
   }
-  APP=TrackerSync.project(baseData,events);renderAll();renderSyncReview();
-  status.textContent=`${events.length} email updates loaded · checked ${new Date().toLocaleTimeString()}${APP.sync.lastEventAt?' · latest event '+new Date(APP.sync.lastEventAt).toLocaleDateString():''}`;
+  APP=TrackerSync.project(baseData,events);syncRuntime.lastSuccessAt=new Date().toISOString();renderAll();renderSyncReview();
+  status.textContent=`${events.length} published email updates loaded · fetched ${new Date().toLocaleTimeString()}${APP.sync.lastEventAt?' · latest event '+new Date(APP.sync.lastEventAt).toLocaleDateString():''}`;
   document.getElementById('syncSetupResult').hidden=true;
- }catch(e){status.textContent='Updates unavailable: '+e.message+'. Showing the last successfully loaded data.';}
- finally{syncBusy=false;}
+ }catch(e){syncRuntime.error=e.message;status.textContent='Updates unavailable: '+e.message+'. Showing the last successfully loaded data.';}
+ finally{syncBusy=false;renderFreshness();}
 }
 function renderSyncReview(){
  const sync=APP.sync||{reviews:[],financial:[]};
@@ -60,9 +91,13 @@ function renderSyncReview(){
  for(const e of sync.reviews){const p=document.createElement('p');p.textContent=[e.merchant,e.orderId,e.tracking,e.status,e.note].filter(Boolean).join(' · ');root.append(p);}
  if(sync.financial.length){const p=document.createElement('p');p.textContent='New receipt amounts (separate from historical analytics): '+sync.financial.map(e=>`${e.merchant} ${e.orderId}: ${e.kind||'purchase'} ${Number.isFinite(e.total)?money(e.total):'amount unknown'}`).join('; ');root.append(p);}
 }
+document.getElementById('lockApp').addEventListener('click',lockApp);
 document.getElementById('setupSync').addEventListener('click',setupSync);
 document.getElementById('refreshSync').addEventListener('click',refreshUpdates);
 document.getElementById('gateForm').addEventListener('submit',async e=>{e.preventDefault();const err=document.getElementById('err');err.textContent='Unlocking…';try{await unlock(document.getElementById('pw').value);document.getElementById('pw').value='';err.textContent='';}catch(_){err.textContent='Unable to unlock. Check your password and connection.';}});
-// Remove the legacy plaintext password cache. Keep the derived key in memory only.
+// Remove the legacy plaintext password cache. Remembering uses a non-exportable CryptoKey.
 localStorage.removeItem('pkg_board_pw');
 setInterval(()=>{if(baseData&&!document.hidden)refreshUpdates();},300000);
+
+document.addEventListener('visibilitychange',()=>{if(baseData&&!document.hidden&&Date.now()-Date.parse(syncRuntime.lastAttemptAt||0)>=300000)refreshUpdates();});
+restoreRemembered();

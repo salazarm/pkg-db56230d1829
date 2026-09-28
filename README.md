@@ -4,19 +4,21 @@ The existing shipment, inventory, calendar, discovery and analytics views now us
 
 ## Status
 
-GitHub write access was verified on September 28, 2026. This revision is ready for GitHub Pages. Email automation is not enabled until the app's encryption setup and first update batch have been verified. No mailbox content has been committed.
+GitHub write access was verified on September 28, 2026. The encrypted update app is deployed to GitHub Pages. The Meta tab separates data dates, browser fetches and email monitoring status. Email automation is not enabled until the app's encryption setup and first update batch have been verified. The initial encrypted email batch remains unpublished pending explicit approval.
 
 ## Design
 
 - `archive.html`: byte-for-byte copy of the previous index, retaining the encrypted baseline and rollback path.
 - `index.html`: existing views with separate data loading, encrypted update controls, delivery column and review panel.
 - `sync-engine.js`: deterministic event projection, conservative parcel matching, duplicate protection, monotonic shipment status and inventory propagation.
+- `meta-ui.js`: displays section freshness, browser refresh health, release version and recorded schedules. `sync/status.json` records service configuration; unavailable or unrecorded check times stay explicit.
+- `remember-unlock.js`: optionally stores a non-exportable AES-GCM CryptoKey in IndexedDB on this browser. Lock deletes it. No password is stored.
 - `sync-ui.js`: decrypts the baseline locally; generates RSA-OAEP 3072-bit keys on setup; encrypts the private key under the existing password-derived AES-GCM key; fetches and decrypts event envelopes.
 - `sync/config.json`: produced by the setup control after deployment. Contains only a public key and encrypted private key. Never publish an unencrypted private key or password.
 - `scripts/seal-event.cjs`: uses only the public key to encrypt private event input with a fresh AES-256-GCM key, then wraps that key with RSA-OAEP SHA-256. The opaque event ID is authenticated as GCM additional data.
 - `sync/manifest.json`: ordered list of SHA-256 event IDs. Event IDs derive from Gmail message ID plus stable event key, not the extraction time.
 
-The shared password is unchanged, but it is no longer saved in browser storage. The derived unlock key remains in memory; reloading requires unlocking again. Legacy plaintext password caches are removed on load. The page does not send email or access Gmail. The authorized Gmail/GitHub automation performs extraction and publishes encrypted envelopes.
+The shared password is unchanged, but it is no longer saved in browser storage. Remember on this device is enabled by default at the user’s request. After a successful unlock it stores the non-exportable derived key in IndexedDB, allowing reloads to reopen the app. Unchecking it keeps the session in memory. Lock clears the remembered key. Anyone using that browser can open the app while it is remembered. Legacy plaintext password caches are removed on load. The page does not send email or access Gmail. The authorized Gmail/GitHub automation performs extraction and publishes encrypted envelopes.
 
 ## Complete activation
 
@@ -42,4 +44,4 @@ Carrier delivery, building receipt, and resident pickup are distinct. An old mes
 
 `node --test tests/*.test.cjs`
 
-Includes split shipments, replay, out-of-order status, ambiguous matches, USPS normalization, invalid input, browser-compatible encryption round-trip, envelope tampering and CLI deduplication. Live browser validation remains pending deployment.
+Includes split shipments, replay, out-of-order status, ambiguous matches, USPS normalization, invalid input, browser-compatible encryption round-trip, envelope tampering and CLI deduplication. Core event/encryption tests and freshness regression checks pass. Live release validation includes the Meta tab, calendar notice, remembered unlock and Lock behavior.

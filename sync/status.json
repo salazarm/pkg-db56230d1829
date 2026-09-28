@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "verifiedAt": "2026-09-28T16:04:24Z",
+  "email": {
+    "state": "awaiting_approval",
+    "lastSuccessfulCheckAt": null,
+    "lastPublishedAt": null
+  },
+  "obey": {
+    "state": "enabled",
+    "schedule": "Daily around 7:04 p.m. America/New_York. Actual run time may vary."
+  }
+}

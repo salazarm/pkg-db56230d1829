@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "verifiedAt": "2026-09-28T16:16:23.907886+00:00",
+  "verifiedAt": "2026-09-28T22:21:22.669740+00:00",
   "email": {
-    "state": "awaiting_publication_approval",
-    "lastSuccessfulCheckAt": "2026-09-28T17:57:27.359825+00:00",
-    "lastPublishedAt": null,
+    "state": "awaiting_verification",
+    "lastSuccessfulCheckAt": "2026-09-28T22:20:46.009Z",
+    "lastPublishedAt": "2026-09-28T22:21:22.669740+00:00",
     "checkMode": "manual",
-    "coverage": "Manual transaction-email reconciliation since September 17, 2026. Prepared changes are not yet published; unresolved matches require review.",
-    "lastPublishError": "Automatic approval review blocked publication of the encrypted email batch. Approval to publish the email data is still required; the encrypted sync key is already published."
+    "coverage": "Transaction emails reconciled since September 17, 2026. Encrypted updates published; unresolved parcel matches and unverified amounts remain in Needs review.",
+    "lastPublishError": null
   },
   "obey": {
     "state": "enabled",

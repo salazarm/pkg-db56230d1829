@@ -4,7 +4,7 @@ The existing shipment, inventory, calendar, discovery and analytics views now us
 
 ## Status
 
-GitHub write access was verified on September 28, 2026. The encrypted update app is deployed to GitHub Pages. The Meta tab separates data dates, browser fetches and email monitoring status. Email automation is not enabled until the app's encryption setup and first update batch have been verified. The encrypted key and Meta tab are published. Automatic review separately blocked the initial encrypted email batch pending explicit approval to publish the encrypted Gmail-derived data. The prepared batch contains 30 events, including verified carrier, desk, pickup and exact receipt updates. No email automation is active.
+GitHub write access and explicit publication consent were verified on September 28, 2026. The encrypted update app, Meta tab and encrypted key are deployed to GitHub Pages. The first batch contains 37 encrypted events, including verified carrier, desk, pickup and exact receipt updates. Email automation remains inactive pending live validation. Meta separates data dates, browser fetches, Gmail check completion and publication time.
 
 ## Design
 
@@ -50,4 +50,4 @@ Includes split shipments, replay, out-of-order status, ambiguous matches, USPS n
 
 ## September 28 refresh
 
-Nine public product recommendations were refreshed with price, image and XXL/2XL stock checks. Calendar distinguishes past ETAs from due-today dates and shows known carrier delivery dates. Thirty encrypted email events remain prepared but unpublished pending explicit publication approval; cancelled browser unlock prevented live private-data validation. No timestamps claim those pending events have been applied.
+Nine public product recommendations were refreshed with price, image and XXL/2XL stock checks. Calendar distinguishes past ETAs from due-today dates and shows known carrier delivery dates. Thirty-seven encrypted email events are published with explicit user approval. Live private-data validation is pending before email automation activation.
